@@ -35,10 +35,8 @@ import {
 
    ========================================================= */
 
-const SUPABASE_URL = 'https://xoajnfnihfyxxvftfuhe.supabase.co';
-
-const SUPABASE_ANON_KEY = 'sb_publishable_-muQvM27vP9JkeAPmhn8ag_I_0oMhD3';
-
+   const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL;
+   const SUPABASE_ANON_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY;
 /* =========================================================
 
    LOCAL STORAGE
