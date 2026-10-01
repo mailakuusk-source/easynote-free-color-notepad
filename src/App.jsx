@@ -205,6 +205,10 @@ const translations = {
 
     saving: 'Saving...',
 
+    editNote: 'Edit Note',
+    saveChanges: 'Save Changes',
+    cancel: 'Cancel',
+
     pinned: 'Pinned',
 
     notes: 'Notes',
@@ -343,6 +347,10 @@ const translations = {
 
     saving: 'Сохраняем...',
 
+    editNote: 'Редактировать заметку',
+    saveChanges: 'Сохранить изменения',
+    cancel: 'Отмена',
+
     pinned: 'Закреплённые',
 
     notes: 'Заметки',
@@ -479,6 +487,10 @@ const translations = {
     save: 'Guardar nota',
 
     saving: 'Guardando...',
+
+    editNote: 'Editar nota',
+    saveChanges: 'Guardar cambios',
+    cancel: 'Cancelar',
 
     pinned: 'Fijadas',
 
@@ -861,6 +873,45 @@ async function updatePinRequest(accessToken, userId, noteId, pinned) {
 
 /* =========================================================
 
+   РЕДАКТИРОВАНИЕ ЗАМЕТКИ
+
+   ========================================================= */
+
+async function updateNoteRequest(accessToken, userId, noteId, note) {
+  const params = new URLSearchParams();
+
+  params.set('id', `eq.${noteId}`);
+  params.set('user_id', `eq.${userId}`);
+
+  const response = await fetch(
+    `${SUPABASE_URL}/rest/v1/notes?${params.toString()}`,
+    {
+      method: 'PATCH',
+      headers: getDatabaseHeaders(accessToken, {
+        Prefer: 'return=representation',
+      }),
+      body: JSON.stringify({
+        title: note.title,
+        content: note.content,
+        color: note.color,
+        color_name: note.color_name,
+        reminder: note.reminder || null,
+        attachment: note.attachment || null,
+      }),
+    }
+  );
+
+  const data = await response.json().catch(() => null);
+
+  if (!response.ok) {
+    throw new Error(data?.message || data?.details || 'Unable to update note');
+  }
+
+  return Array.isArray(data) ? data[0] : data;
+}
+
+/* =========================================================
+
    УДАЛЕНИЕ
 
    ========================================================= */
@@ -972,6 +1023,8 @@ export default function App() {
 
   const [savingNote, setSavingNote] = useState(false);
 
+  const [editingNoteId, setEditingNoteId] = useState(null);
+
   const t = translations[language];
 
   const isLoggedIn = Boolean(accessToken && userId);
@@ -1073,6 +1126,84 @@ export default function App() {
   const pinnedNotes = filteredNotes.filter((note) => note.pinned);
 
   const normalNotes = filteredNotes.filter((note) => !note.pinned);
+
+  /* -------------------------------------------------------
+
+     Редактирование заметки
+
+     ------------------------------------------------------- */
+
+  function toDateTimeLocal(value) {
+    if (!value) return '';
+
+    const date = new Date(value);
+    const offset = date.getTimezoneOffset();
+    const localDate = new Date(date.getTime() - offset * 60 * 1000);
+
+    return localDate.toISOString().slice(0, 16);
+  }
+
+  function startEditing(note) {
+    setEditingNoteId(note.id);
+    setNewTitle(note.title || '');
+    setNewContent(note.content || '');
+    setReminderDate(toDateTimeLocal(note.reminder));
+    setHasAttachment(Boolean(note.attachment));
+    setSelectedColor(
+      COLORS.find((color) => color.name === note.color_name) || COLORS[0]
+    );
+
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  }
+
+  function cancelEditing() {
+    setEditingNoteId(null);
+    setNewTitle('');
+    setNewContent('');
+    setReminderDate('');
+    setHasAttachment(false);
+    setSelectedColor(COLORS[0]);
+  }
+
+  async function saveEditedNote() {
+    if (!editingNoteId || savingNote) return;
+    if (!newTitle.trim() && !newContent.trim()) return;
+
+    setSavingNote(true);
+    setSyncState('syncing');
+
+    const updatedNote = {
+      title: newTitle.trim(),
+      content: newContent.trim(),
+      color: selectedColor.hex,
+      color_name: selectedColor.name,
+      reminder: reminderDate || null,
+      attachment: hasAttachment ? 'image_1.png' : null,
+    };
+
+    try {
+      const updated = await updateNoteRequest(
+        accessToken,
+        userId,
+        editingNoteId,
+        updatedNote
+      );
+
+      if (updated) {
+        setNotes((current) =>
+          current.map((item) => (item.id === editingNoteId ? updated : item))
+        );
+      }
+
+      cancelEditing();
+      setSyncState('synced');
+    } catch (error) {
+      console.error(error);
+      setSyncState('error');
+    } finally {
+      setSavingNote(false);
+    }
+  }
 
   /* -------------------------------------------------------
 
@@ -1513,6 +1644,7 @@ export default function App() {
                       onDelete={deleteNote}
                       onShare={shareNote}
                       onTogglePin={togglePin}
+                      onEdit={startEditing}
                     />
                   ))}
                 </div>
@@ -1543,7 +1675,9 @@ export default function App() {
                       <Plus size={20} />
                     </div>
 
-                    <h2 className="text-xl font-bold">{t.newNote}</h2>
+                    <h2 className="text-xl font-bold">
+                      {editingNoteId ? t.editNote : t.newNote}
+                    </h2>
                   </div>
 
                   {/* TITLE */}
@@ -1663,7 +1797,7 @@ export default function App() {
 
                   <button
                     type="button"
-                    onClick={addNote}
+                    onClick={editingNoteId ? saveEditedNote : addNote}
                     disabled={
                       savingNote || (!newTitle.trim() && !newContent.trim())
                     }
@@ -1675,8 +1809,27 @@ export default function App() {
                       <Plus size={18} />
                     )}
 
-                    {savingNote ? t.saving : t.save}
+                    {savingNote
+                      ? t.saving
+                      : editingNoteId
+                      ? t.saveChanges
+                      : t.save}
                   </button>
+
+                  {editingNoteId && (
+                    <button
+                      type="button"
+                      onClick={cancelEditing}
+                      disabled={savingNote}
+                      className={`mt-3 w-full rounded-xl border px-4 py-3 text-sm font-bold transition-all ${
+                        isDarkMode
+                          ? 'border-slate-700 text-slate-300 hover:bg-slate-800'
+                          : 'border-slate-300 text-slate-600 hover:bg-slate-100'
+                      }`}
+                    >
+                      {t.cancel}
+                    </button>
+                  )}
                 </div>
               </aside>
 
@@ -1715,6 +1868,7 @@ export default function App() {
                         onDelete={deleteNote}
                         onShare={shareNote}
                         onTogglePin={togglePin}
+                        onEdit={startEditing}
                       />
                     ))}
                   </div>
@@ -2115,6 +2269,7 @@ function NoteCard({
   onDelete,
   onShare,
   onTogglePin,
+  onEdit,
 }) {
   const color =
     COLORS.find((item) => item.name === note.color_name) || COLORS[0];
@@ -2160,7 +2315,16 @@ function NoteCard({
   return (
     <article
       style={isDarkMode ? darkStyle : lightStyle}
-      className="group flex min-h-[210px] flex-col rounded-3xl border p-5 transition-all duration-300 hover:-translate-y-1"
+      onClick={() => onEdit(note)}
+      role="button"
+      tabIndex={0}
+      onKeyDown={(event) => {
+        if (event.key === 'Enter' || event.key === ' ') {
+          event.preventDefault();
+          onEdit(note);
+        }
+      }}
+      className="group flex min-h-[210px] cursor-pointer flex-col rounded-3xl border p-5 transition-all duration-300 hover:-translate-y-1"
     >
       <div className="mb-4 flex items-start justify-between gap-3">
         <div
@@ -2177,7 +2341,10 @@ function NoteCard({
         <div className="flex items-center gap-1">
           <button
             type="button"
-            onClick={() => onTogglePin(note)}
+            onClick={(event) => {
+              event.stopPropagation();
+              onTogglePin(note);
+            }}
             title={note.pinned ? t.unpin : t.pin}
             className={`grid h-8 w-8 place-items-center rounded-lg transition-all ${
               note.pinned
@@ -2191,7 +2358,10 @@ function NoteCard({
           </button>
           <button
             type="button"
-            onClick={() => onShare(note)}
+            onClick={(event) => {
+              event.stopPropagation();
+              onShare(note);
+            }}
             title="Share"
             className={`grid h-8 w-8 place-items-center rounded-lg transition-all ${
               isDarkMode
@@ -2203,7 +2373,10 @@ function NoteCard({
           </button>
           <button
             type="button"
-            onClick={() => onDelete(note)}
+            onClick={(event) => {
+              event.stopPropagation();
+              onDelete(note);
+            }}
             title={t.delete}
             className={`grid h-8 w-8 place-items-center rounded-lg transition-all ${
               isDarkMode
