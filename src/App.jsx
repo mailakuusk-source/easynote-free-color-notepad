@@ -351,6 +351,37 @@ async function addAttachmentUrls(notes) {
 }
 
 function getLocale(language) { return language === 'ru' ? 'ru-RU' : language === 'es' ? 'es-ES' : 'en-US'; }
+function localDateTimeToIso(value) {
+  if (!value) return null;
+  const match = String(value).match(/^(\\d{4})-(\\d{2})-(\\d{2})T(\\d{2}):(\\d{2})$/);
+  if (!match) return value;
+
+  const [, year, month, day, hour, minute] = match;
+  const local = new Date(
+    Number(year),
+    Number(month) - 1,
+    Number(day),
+    Number(hour),
+    Number(minute),
+    0,
+    0
+  );
+
+  return local.toISOString();
+}
+
+function isoToLocalDateTime(value) {
+  if (!value) return '';
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return '';
+
+  const pad = (number) => String(number).padStart(2, '0');
+
+  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(
+    date.getDate()
+  )}T${pad(date.getHours())}:${pad(date.getMinutes())}`;
+}
+
 function formatDate(value, language) {
   if (!value) return '';
   return new Intl.DateTimeFormat(getLocale(language), { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' }).format(new Date(value));
@@ -536,7 +567,7 @@ export default function App() {
       const attachment = await resolveAttachment();
       const updated = await updateNoteRequest(accessToken, userId, editingNoteId, {
         title: newTitle.trim(), content: newContent.trim(), color: selectedColor.hex,
-        color_name: selectedColor.name, reminder: reminderDate || null, attachment,
+        color_name: selectedColor.name, reminder: localDateTimeToIso(reminderDate), attachment,
       });
       if (previousAttachment && previousAttachment !== attachment) {
         try { await deleteAttachmentRequest(previousAttachment); }
@@ -556,7 +587,7 @@ export default function App() {
       const attachment = await resolveAttachment();
       const created = await createNoteRequest(accessToken, userId, {
         title: newTitle.trim(), content: newContent.trim(), color: selectedColor.hex,
-        color_name: selectedColor.name, pinned: false, reminder: reminderDate || null, attachment,
+        color_name: selectedColor.name, pinned: false, reminder: localDateTimeToIso(reminderDate), attachment,
       });
       const [enriched] = await addAttachmentUrls([created]);
       setNotes((current) => [enriched, ...current]); clearForm(); setSyncState('synced');
