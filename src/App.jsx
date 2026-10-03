@@ -318,6 +318,17 @@ async function uploadAttachment(userId, file) {
   if (!response.ok) throw new Error((await response.text()) || 'Image upload failed');
   return path;
 }
+async function deleteAttachmentRequest(path) {
+  if (!path || path === 'image_1.png') return;
+  const encodedPath = encodeURIComponent(path).replace(/%2F/g, '/');
+  const response = await authenticatedFetch(
+    `${SUPABASE_URL}/storage/v1/object/${STORAGE_BUCKET}/${encodedPath}`,
+    { method: 'DELETE', headers: { apikey: SUPABASE_ANON_KEY } }
+  );
+  if (!response.ok && response.status !== 404) {
+    throw new Error((await response.text()) || 'Unable to delete attachment');
+  }
+}
 async function createAttachmentSignedUrl(path) {
   if (!path || path === 'image_1.png') return '';
   const response = await authenticatedFetch(
@@ -474,11 +485,17 @@ export default function App() {
     if (!editingNoteId || savingNote || (!newTitle.trim() && !newContent.trim())) return;
     setSavingNote(true); setSyncState('syncing'); setAttachmentError('');
     try {
+      const previousNote = notes.find((item) => item.id === editingNoteId);
+      const previousAttachment = previousNote?.attachment || '';
       const attachment = await resolveAttachment();
       const updated = await updateNoteRequest(accessToken, userId, editingNoteId, {
         title: newTitle.trim(), content: newContent.trim(), color: selectedColor.hex,
         color_name: selectedColor.name, reminder: reminderDate || null, attachment,
       });
+      if (previousAttachment && previousAttachment !== attachment) {
+        try { await deleteAttachmentRequest(previousAttachment); }
+        catch (storageError) { console.error('Unable to delete old attachment:', storageError); }
+      }
       const [enriched] = await addAttachmentUrls([updated]);
       setNotes((current) => current.map((item) => item.id === editingNoteId ? enriched : item));
       clearForm(); setSyncState('synced');
@@ -514,7 +531,14 @@ export default function App() {
   }
   async function deleteNote(note) {
     const old = notes; setNotes((current) => current.filter((i) => i.id !== note.id)); setSyncState('syncing');
-    try { await deleteNoteRequest(accessToken, userId, note.id); setSyncState('synced'); }
+    try {
+      await deleteNoteRequest(accessToken, userId, note.id);
+      if (note.attachment) {
+        try { await deleteAttachmentRequest(note.attachment); }
+        catch (storageError) { console.error('Unable to delete attachment:', storageError); }
+      }
+      setSyncState('synced');
+    }
     catch (error) { console.error(error); setNotes(old); setSyncState('error'); }
   }
   async function shareNote(note) {
