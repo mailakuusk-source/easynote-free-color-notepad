@@ -90,7 +90,7 @@ const translations = {
     updatingPassword: 'Сохраняем...', passwordUpdated: 'Пароль изменён. Теперь можно войти.',
     backToSignIn: 'Вернуться ко входу', search: 'Поиск заметок...', newNote: 'Новая заметка',
     title: 'Заголовок', titlePlaceholder: 'Название заметки', text: 'Текст заметки',
-    textPlaceholder: 'Напишите что-нибудь...', reminder: 'Напоминание', attachment: 'Вложение',
+    textPlaceholder: 'Напишите что-нибудь...', reminder: 'Напоминание', enableNotifications: 'Включить уведомления', notificationsEnabled: 'Уведомления включены', notificationsUnsupported: 'Этот браузер не поддерживает уведомления.', attachment: 'Вложение',
     addAttachment: 'Прикрепить JPG / PNG', replaceAttachment: 'Заменить изображение',
     removeAttachment: 'Убрать изображение', fileTooLarge: 'Размер изображения — не больше 5 MB.',
     wrongFileType: 'Можно загружать только JPG, JPEG и PNG.',
@@ -128,7 +128,7 @@ const translations = {
     updatingPassword: 'Guardando...', passwordUpdated: 'Contraseña actualizada. Ya puedes iniciar sesión.',
     backToSignIn: 'Volver a iniciar sesión', search: 'Buscar notas...', newNote: 'Nueva nota',
     title: 'Título', titlePlaceholder: 'Título de la nota', text: 'Nota',
-    textPlaceholder: 'Escribe algo...', reminder: 'Recordatorio', attachment: 'Archivo adjunto',
+    textPlaceholder: 'Escribe algo...', reminder: 'Recordatorio', enableNotifications: 'Activar notificaciones', notificationsEnabled: 'Notificaciones activadas', notificationsUnsupported: 'Este navegador no admite notificaciones.', attachment: 'Archivo adjunto',
     addAttachment: 'Adjuntar JPG / PNG', replaceAttachment: 'Reemplazar imagen',
     removeAttachment: 'Quitar imagen', fileTooLarge: 'La imagen debe pesar 5 MB o menos.',
     wrongFileType: 'Solo se permiten imágenes JPG, JPEG y PNG.',
@@ -382,12 +382,45 @@ export default function App() {
   const [selectedColor, setSelectedColor] = useState(COLORS[0]);
   const [savingNote, setSavingNote] = useState(false);
   const [editingNoteId, setEditingNoteId] = useState(null);
+  const [notificationPermission, setNotificationPermission] = useState(
+    typeof Notification === 'undefined' ? 'unsupported' : Notification.permission
+  );
   const t = translations[language];
   const isLoggedIn = Boolean(accessToken && userId);
 
   useEffect(() => localStorage.setItem(LANG_KEY, language), [language]);
   useEffect(() => localStorage.setItem(THEME_KEY, String(isDarkMode)), [isDarkMode]);
   useEffect(() => () => { if (attachmentPreview?.startsWith('blob:')) URL.revokeObjectURL(attachmentPreview); }, [attachmentPreview]);
+
+  useEffect(() => {
+    if (!isLoggedIn || notificationPermission !== 'granted' || typeof Notification === 'undefined') return;
+
+    function checkReminders() {
+      const now = Date.now();
+      notes.forEach((note) => {
+        if (!note.reminder) return;
+        const reminderTime = new Date(note.reminder).getTime();
+        if (!Number.isFinite(reminderTime) || reminderTime > now) return;
+
+        const notificationKey = `easynote_reminder_${note.id}_${note.reminder}`;
+        if (localStorage.getItem(notificationKey)) return;
+
+        try {
+          new Notification(note.title || t.appName, {
+            body: note.content?.trim() || `${t.reminderLabel}: ${formatReminder(note.reminder, language)}`,
+            tag: notificationKey,
+          });
+          localStorage.setItem(notificationKey, 'shown');
+        } catch (error) {
+          console.error('Unable to show reminder notification:', error);
+        }
+      });
+    }
+
+    checkReminders();
+    const timer = window.setInterval(checkReminders, 15000);
+    return () => window.clearInterval(timer);
+  }, [notes, isLoggedIn, notificationPermission, language, t.appName, t.reminderLabel]);
 
   useEffect(() => {
     let cancelled = false;
@@ -450,6 +483,19 @@ export default function App() {
     const date = new Date(value);
     return new Date(date.getTime() - date.getTimezoneOffset() * 60000).toISOString().slice(0, 16);
   }
+  async function enableNotifications() {
+    if (typeof Notification === 'undefined') {
+      setNotificationPermission('unsupported');
+      return;
+    }
+    try {
+      const permission = await Notification.requestPermission();
+      setNotificationPermission(permission);
+    } catch (error) {
+      console.error('Unable to request notification permission:', error);
+    }
+  }
+
   function clearForm() {
     setEditingNoteId(null); setNewTitle(''); setNewContent(''); setReminderDate('');
     setAttachmentFile(null); setExistingAttachment(''); setAttachmentPreview('');
@@ -623,6 +669,15 @@ export default function App() {
                 <div className="mt-4">
                   <label className={`mb-2 flex items-center gap-2 text-xs font-bold uppercase tracking-wider ${isDarkMode ? 'text-slate-300' : 'text-slate-600'}`}><Bell size={14} />{t.reminder}</label>
                   <input type="datetime-local" value={reminderDate} onChange={(e) => setReminderDate(e.target.value)} className={`${inputClass(isDarkMode)} ${isDarkMode ? '[color-scheme:dark]' : '[color-scheme:light]'}`} />
+                  {notificationPermission === 'granted' ? (
+                    <div className="mt-2 flex items-center gap-2 text-xs font-bold text-emerald-400"><Bell size={13} />{t.notificationsEnabled}</div>
+                  ) : notificationPermission === 'unsupported' ? (
+                    <div className="mt-2 text-xs font-semibold text-amber-400">{t.notificationsUnsupported}</div>
+                  ) : (
+                    <button type="button" onClick={enableNotifications} className={`mt-2 w-full rounded-xl border px-3 py-2 text-sm font-bold ${isDarkMode ? 'border-cyan-500/30 text-cyan-300' : 'border-cyan-300 text-cyan-700'}`}>
+                      {t.enableNotifications}
+                    </button>
+                  )}
                 </div>
 
                 <div className="mt-4">
