@@ -1,4 +1,5 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 import {
   Bell, Cloud, CloudOff, Globe, LogOut, Mail, Moon, Paperclip, Pin, Plus,
   Search, Share2, Sun, Trash2, UserPlus, LockKeyhole, LogIn, X,
@@ -53,7 +54,7 @@ const translations = {
     updatingPassword: 'Saving...', passwordUpdated: 'Password updated. You can now sign in.',
     backToSignIn: 'Back to Sign In', search: 'Search notes...', newNote: 'New Note',
     title: 'Title', titlePlaceholder: 'Note title', text: 'Note',
-    textPlaceholder: 'Write something...', reminder: 'Reminder', attachment: 'Attachment',
+    textPlaceholder: 'Write something...', reminder: 'Reminder', alarmTitle: 'Alarm', stopAlarm: 'Stop', snoozeAlarm: 'Snooze 5 min', attachment: 'Attachment',
     addAttachment: 'Attach JPG / PNG', replaceAttachment: 'Replace image',
     removeAttachment: 'Remove image', fileTooLarge: 'Image must be 5 MB or smaller.',
     wrongFileType: 'Only JPG, JPEG and PNG images are allowed.',
@@ -90,7 +91,7 @@ const translations = {
     updatingPassword: 'Сохраняем...', passwordUpdated: 'Пароль изменён. Теперь можно войти.',
     backToSignIn: 'Вернуться ко входу', search: 'Поиск заметок...', newNote: 'Новая заметка',
     title: 'Заголовок', titlePlaceholder: 'Название заметки', text: 'Текст заметки',
-    textPlaceholder: 'Напишите что-нибудь...', reminder: 'Напоминание', enableNotifications: 'Включить уведомления', notificationsEnabled: 'Уведомления включены', notificationsUnsupported: 'Этот браузер не поддерживает уведомления.', attachment: 'Вложение',
+    textPlaceholder: 'Напишите что-нибудь...', reminder: 'Напоминание', alarmTitle: 'Будильник', stopAlarm: 'Остановить', snoozeAlarm: 'Отложить на 5 минут', enableNotifications: 'Включить уведомления', notificationsEnabled: 'Уведомления включены', notificationsUnsupported: 'Этот браузер не поддерживает уведомления.', attachment: 'Вложение',
     addAttachment: 'Прикрепить JPG / PNG', replaceAttachment: 'Заменить изображение',
     removeAttachment: 'Убрать изображение', fileTooLarge: 'Размер изображения — не больше 5 MB.',
     wrongFileType: 'Можно загружать только JPG, JPEG и PNG.',
@@ -128,7 +129,7 @@ const translations = {
     updatingPassword: 'Guardando...', passwordUpdated: 'Contraseña actualizada. Ya puedes iniciar sesión.',
     backToSignIn: 'Volver a iniciar sesión', search: 'Buscar notas...', newNote: 'Nueva nota',
     title: 'Título', titlePlaceholder: 'Título de la nota', text: 'Nota',
-    textPlaceholder: 'Escribe algo...', reminder: 'Recordatorio', enableNotifications: 'Activar notificaciones', notificationsEnabled: 'Notificaciones activadas', notificationsUnsupported: 'Este navegador no admite notificaciones.', attachment: 'Archivo adjunto',
+    textPlaceholder: 'Escribe algo...', reminder: 'Recordatorio', alarmTitle: 'Alarma', stopAlarm: 'Detener', snoozeAlarm: 'Posponer 5 min', enableNotifications: 'Activar notificaciones', notificationsEnabled: 'Notificaciones activadas', notificationsUnsupported: 'Este navegador no admite notificaciones.', attachment: 'Archivo adjunto',
     addAttachment: 'Adjuntar JPG / PNG', replaceAttachment: 'Reemplazar imagen',
     removeAttachment: 'Quitar imagen', fileTooLarge: 'La imagen debe pesar 5 MB o menos.',
     wrongFileType: 'Solo se permiten imágenes JPG, JPEG y PNG.',
@@ -416,12 +417,95 @@ export default function App() {
   const [notificationPermission, setNotificationPermission] = useState(
     typeof Notification === 'undefined' ? 'unsupported' : Notification.permission
   );
+  const [activeAlarm, setActiveAlarm] = useState(null);
+  const [snoozedAlarms, setSnoozedAlarms] = useState({});
+  const [snoozeUntil, setSnoozeUntil] = useState(null);
+  const [snoozeSecondsLeft, setSnoozeSecondsLeft] = useState(0);
+  const alarmIntervalRef = useRef(null);
+  const audioContextRef = useRef(null);
   const t = translations[language];
   const isLoggedIn = Boolean(accessToken && userId);
 
   useEffect(() => localStorage.setItem(LANG_KEY, language), [language]);
   useEffect(() => localStorage.setItem(THEME_KEY, String(isDarkMode)), [isDarkMode]);
   useEffect(() => () => { if (attachmentPreview?.startsWith('blob:')) URL.revokeObjectURL(attachmentPreview); }, [attachmentPreview]);
+
+  function playAlarmBeep() {
+    try {
+      const AudioContextClass = window.AudioContext || window.webkitAudioContext;
+      if (!AudioContextClass) return;
+      if (!audioContextRef.current) audioContextRef.current = new AudioContextClass();
+      const ctx = audioContextRef.current;
+      if (ctx.state === 'suspended') ctx.resume();
+
+      const oscillator = ctx.createOscillator();
+      const gain = ctx.createGain();
+      oscillator.type = 'square';
+      oscillator.frequency.setValueAtTime(880, ctx.currentTime);
+      gain.gain.setValueAtTime(0.0001, ctx.currentTime);
+      gain.gain.exponentialRampToValueAtTime(0.22, ctx.currentTime + 0.02);
+      gain.gain.exponentialRampToValueAtTime(0.0001, ctx.currentTime + 0.45);
+      oscillator.connect(gain);
+      gain.connect(ctx.destination);
+      oscillator.start();
+      oscillator.stop(ctx.currentTime + 0.5);
+    } catch (error) {
+      console.error('Unable to play alarm sound:', error);
+    }
+  }
+
+  function stopAlarm() {
+    if (alarmIntervalRef.current) {
+      window.clearInterval(alarmIntervalRef.current);
+      alarmIntervalRef.current = null;
+    }
+    setSnoozeUntil(null);
+    setSnoozeSecondsLeft(0);
+    setActiveAlarm(null);
+  }
+
+  function startAlarm(note) {
+    if (activeAlarm?.id === note.id && alarmIntervalRef.current) return;
+    if (alarmIntervalRef.current) window.clearInterval(alarmIntervalRef.current);
+    setSnoozeUntil(null);
+    setSnoozeSecondsLeft(0);
+    setActiveAlarm(note);
+    playAlarmBeep();
+    alarmIntervalRef.current = window.setInterval(playAlarmBeep, 1200);
+  }
+
+  function snoozeAlarm() {
+    if (!activeAlarm) return;
+    const noteId = activeAlarm.id;
+    const until = Date.now() + 5 * 60 * 1000;
+    if (alarmIntervalRef.current) {
+      window.clearInterval(alarmIntervalRef.current);
+      alarmIntervalRef.current = null;
+    }
+    setSnoozeUntil(until);
+    setSnoozeSecondsLeft(5 * 60);
+    setSnoozedAlarms((current) => ({
+      ...current,
+      [noteId]: until,
+    }));
+  }
+
+  useEffect(() => {
+    if (!snoozeUntil || !activeAlarm) return;
+    const updateCountdown = () => {
+      const seconds = Math.max(0, Math.ceil((snoozeUntil - Date.now()) / 1000));
+      setSnoozeSecondsLeft(seconds);
+      if (seconds <= 0) setSnoozeUntil(null);
+    };
+    updateCountdown();
+    const countdownTimer = window.setInterval(updateCountdown, 250);
+    return () => window.clearInterval(countdownTimer);
+  }, [snoozeUntil, activeAlarm]);
+
+  useEffect(() => () => {
+    if (alarmIntervalRef.current) window.clearInterval(alarmIntervalRef.current);
+    if (audioContextRef.current) audioContextRef.current.close().catch(() => {});
+  }, []);
 
   useEffect(() => {
     if (!isLoggedIn || notificationPermission !== 'granted' || typeof Notification === 'undefined') return;
@@ -430,20 +514,45 @@ export default function App() {
       const now = Date.now();
       notes.forEach((note) => {
         if (!note.reminder) return;
-        const reminderTime = new Date(note.reminder).getTime();
+        const originalReminderTime = new Date(note.reminder).getTime();
+        const snoozedUntil = snoozedAlarms[note.id];
+        const reminderTime = snoozedUntil || originalReminderTime;
         if (!Number.isFinite(reminderTime) || reminderTime > now) return;
 
-        const notificationKey = `easynote_reminder_${note.id}_${note.reminder}`;
-        if (localStorage.getItem(notificationKey)) return;
+        // Do not make very old reminders ring when the app is opened later.
+        if (!snoozedUntil && now - reminderTime > 2 * 60 * 1000) return;
 
-        try {
-          new Notification(note.title || t.appName, {
-            body: note.content?.trim() || `${t.reminderLabel}: ${formatReminder(note.reminder, language)}`,
-            tag: notificationKey,
-          });
+        const notificationKey = snoozedUntil
+          ? `easynote_snooze_notification_${note.id}_${snoozedUntil}`
+          : `easynote_notification_${note.id}_${note.reminder}`;
+        const alarmKey = snoozedUntil
+          ? `easynote_snooze_alarm_${note.id}_${snoozedUntil}`
+          : `easynote_alarm_${note.id}_${note.reminder}`;
+
+        if (!localStorage.getItem(alarmKey)) {
+          startAlarm(note);
+          localStorage.setItem(alarmKey, 'shown');
+        }
+
+        if (!localStorage.getItem(notificationKey)) {
+          try {
+            new Notification(note.title || t.appName, {
+              body: note.content?.trim() || `${t.reminderLabel}: ${formatReminder(note.reminder, language)}`,
+              tag: notificationKey,
+              requireInteraction: true,
+            });
+          } catch (error) {
+            console.error('Unable to show reminder notification:', error);
+          }
           localStorage.setItem(notificationKey, 'shown');
-        } catch (error) {
-          console.error('Unable to show reminder notification:', error);
+        }
+
+        if (snoozedUntil) {
+          setSnoozedAlarms((current) => {
+            const next = { ...current };
+            delete next[note.id];
+            return next;
+          });
         }
       });
     }
@@ -451,7 +560,7 @@ export default function App() {
     checkReminders();
     const timer = window.setInterval(checkReminders, 15000);
     return () => window.clearInterval(timer);
-  }, [notes, isLoggedIn, notificationPermission, language, t.appName, t.reminderLabel]);
+  }, [notes, isLoggedIn, notificationPermission, language, t.appName, t.reminderLabel, snoozedAlarms]);
 
   useEffect(() => {
     let cancelled = false;
@@ -753,7 +862,60 @@ export default function App() {
           </div>
         </>}
       </main>
-    </div>
+    
+      <style>{`
+        .easynote-alarm-card {
+          position: fixed !important; top: 24px !important; left: 50% !important;
+          transform: translateX(-50%) !important; z-index: 2147483647 !important;
+          width: calc(100% - 32px) !important; max-width: 480px !important;
+          box-sizing: border-box !important;
+        }
+        .easynote-alarm-actions {
+          display: grid !important; grid-template-columns: 1fr 1fr !important;
+          gap: 12px !important; margin-top: 8px !important;
+        }
+        .easynote-alarm-stop, .easynote-alarm-snooze {
+          width: 100% !important; border: 0 !important; border-radius: 12px !important;
+          padding: 14px 16px !important; font-weight: 800 !important; cursor: pointer !important;
+          transition: transform .15s ease, box-shadow .15s ease, background-color .15s ease !important;
+        }
+        .easynote-alarm-stop { background: #ef4444 !important; color: white !important; }
+        .easynote-alarm-stop:hover {
+          background: #b91c1c !important; transform: scale(1.04) !important;
+          box-shadow: 0 8px 24px rgba(239,68,68,.55) !important;
+        }
+        .easynote-alarm-snooze { background: #fbbf24 !important; color: #0f172a !important; }
+        .easynote-alarm-snooze:hover {
+          background: #fde047 !important; transform: scale(1.04) !important;
+          box-shadow: 0 8px 24px rgba(251,191,36,.55) !important;
+        }
+        @media (max-width: 520px) {
+          .easynote-alarm-card { top: 12px !important; }
+          .easynote-alarm-actions { grid-template-columns: 1fr !important; }
+        }
+      `}</style>
+
+      {activeAlarm && createPortal(
+        <div className="easynote-alarm-card" onClick={(e) => e.stopPropagation()}>
+          <div className={`w-full max-w-md max-h-[calc(100vh-3rem)] overflow-y-auto rounded-3xl border p-6 text-center shadow-2xl ${isDarkMode ? 'border-amber-400/40 bg-slate-900 text-white' : 'border-amber-300 bg-white text-slate-900'}`}>
+            <Bell size={48} className="mx-auto mb-3 animate-bounce text-amber-400" />
+            <div className="mb-2 text-sm font-bold uppercase tracking-widest text-amber-400">{t.alarmTitle}</div>
+            <h2 className="mb-2 break-words text-2xl font-extrabold">{activeAlarm.title || t.appName}</h2>
+            {activeAlarm.content && <p className="mb-5 whitespace-pre-wrap break-words text-sm opacity-80">{activeAlarm.content}</p>}
+            {snoozeUntil && (
+              <div style={{ fontSize: '38px', fontWeight: 900, letterSpacing: '2px', margin: '12px 0 16px' }}>
+                {String(Math.floor(snoozeSecondsLeft / 60)).padStart(2, '0')}:{String(snoozeSecondsLeft % 60).padStart(2, '0')}
+              </div>
+            )}
+            <div className="easynote-alarm-actions">
+              <button type="button" onClick={stopAlarm} className="easynote-alarm-stop">{t.stopAlarm}</button>
+              {!snoozeUntil && <button type="button" onClick={snoozeAlarm} className="easynote-alarm-snooze">{t.snoozeAlarm}</button>}
+            </div>
+          </div>
+        </div>,
+        document.body
+      )}
+      </div>
   );
 }
 
