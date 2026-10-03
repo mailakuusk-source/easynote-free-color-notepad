@@ -164,6 +164,8 @@ const translations = {
     authError: 'Authentication error.',
 
     networkError: 'Network error. Please try again.',
+    continueWithGoogle: 'Continue with Google',
+    orContinueWith: 'or continue with',
     forgotPassword: 'Forgot password?',
     resetTitle: 'Reset your password',
     resetDescription: 'Enter your email and we will send you a recovery link.',
@@ -304,6 +306,8 @@ const translations = {
     authError: 'Ошибка авторизации.',
 
     networkError: 'Ошибка сети. Попробуйте ещё раз.',
+    continueWithGoogle: 'Продолжить с Google',
+    orContinueWith: 'или продолжить через',
     forgotPassword: 'Забыли пароль?',
     resetTitle: 'Восстановление пароля',
     resetDescription:
@@ -445,6 +449,8 @@ const translations = {
     authError: 'Error de autenticación.',
 
     networkError: 'Error de red. Inténtalo de nuevo.',
+    continueWithGoogle: 'Continuar con Google',
+    orContinueWith: 'o continuar con',
     forgotPassword: '¿Olvidaste tu contraseña?',
     resetTitle: 'Restablecer contraseña',
     resetDescription:
@@ -679,6 +685,52 @@ async function signUpRequest(email, password) {
   }
 
   return data;
+}
+
+function startGoogleSignIn() {
+  const redirectTo = `${window.location.origin}${window.location.pathname}`;
+  const params = new URLSearchParams({
+    provider: 'google',
+    redirect_to: redirectTo,
+  });
+
+  window.location.href = `${SUPABASE_URL}/auth/v1/authorize?${params.toString()}`;
+}
+
+async function getOAuthSessionFromUrl() {
+  const hash = new URLSearchParams(window.location.hash.replace(/^#/, ''));
+  const accessToken = hash.get('access_token') || '';
+  const refreshToken = hash.get('refresh_token') || '';
+
+  if (!accessToken || !refreshToken) {
+    return null;
+  }
+
+  const response = await fetch(`${SUPABASE_URL}/auth/v1/user`, {
+    method: 'GET',
+    headers: {
+      apikey: SUPABASE_ANON_KEY,
+      Authorization: `Bearer ${accessToken}`,
+    },
+  });
+
+  const user = await response.json().catch(() => null);
+
+  if (!response.ok || !user?.id) {
+    throw new Error(user?.message || 'Google sign in failed');
+  }
+
+  window.history.replaceState(
+    {},
+    document.title,
+    window.location.pathname + window.location.search
+  );
+
+  return {
+    access_token: accessToken,
+    refresh_token: refreshToken,
+    user,
+  };
 }
 
 async function refreshSession() {
@@ -1116,6 +1168,19 @@ export default function App() {
     let cancelled = false;
 
     async function restoreSession() {
+      const oauthSession = await getOAuthSessionFromUrl();
+
+      if (oauthSession) {
+        saveSession(oauthSession);
+        if (!cancelled) {
+          setAccessToken(oauthSession.access_token);
+          setUserId(oauthSession.user.id);
+          setUserEmail(oauthSession.user.email || '');
+          setSessionReady(true);
+        }
+        return;
+      }
+
       const current = getStoredSession();
 
       if (!current.refreshToken) {
@@ -2333,6 +2398,59 @@ function AuthScreen({
                 ? t.login
                 : t.createAccount}
             </button>
+            {showTabs && (
+              <>
+                <div className="my-5 flex items-center gap-3">
+                  <div
+                    className={`h-px flex-1 ${
+                      isDarkMode ? 'bg-slate-700' : 'bg-slate-200'
+                    }`}
+                  />
+                  <span
+                    className={`text-xs font-semibold ${
+                      isDarkMode ? 'text-slate-500' : 'text-slate-400'
+                    }`}
+                  >
+                    {t.orContinueWith}
+                  </span>
+                  <div
+                    className={`h-px flex-1 ${
+                      isDarkMode ? 'bg-slate-700' : 'bg-slate-200'
+                    }`}
+                  />
+                </div>
+                <button
+                  type="button"
+                  onClick={startGoogleSignIn}
+                  disabled={loading}
+                  className={`flex w-full items-center justify-center gap-3 rounded-xl border px-4 py-3.5 font-bold transition-all disabled:opacity-50 ${
+                    isDarkMode
+                      ? 'border-slate-700 bg-slate-950 text-white hover:border-slate-600 hover:bg-slate-800'
+                      : 'border-slate-300 bg-white text-slate-800 hover:bg-slate-50'
+                  }`}
+                >
+                  <svg viewBox="0 0 24 24" className="h-5 w-5" aria-hidden="true">
+                    <path
+                      fill="#4285F4"
+                      d="M21.6 12.23c0-.71-.06-1.4-.18-2.07H12v3.92h5.38a4.6 4.6 0 0 1-2 3.02v2.54h3.24c1.9-1.75 2.98-4.33 2.98-7.41Z"
+                    />
+                    <path
+                      fill="#34A853"
+                      d="M12 22c2.7 0 4.97-.9 6.62-2.43l-3.24-2.54c-.9.6-2.05.96-3.38.96-2.61 0-4.82-1.76-5.61-4.13H3.04v2.62A10 10 0 0 0 12 22Z"
+                    />
+                    <path
+                      fill="#FBBC05"
+                      d="M6.39 13.86A6 6 0 0 1 6.08 12c0-.65.11-1.28.31-1.86V7.52H3.04A10 10 0 0 0 2 12c0 1.61.38 3.14 1.04 4.48l3.35-2.62Z"
+                    />
+                    <path
+                      fill="#EA4335"
+                      d="M12 6.01c1.47 0 2.79.51 3.83 1.5l2.87-2.87A9.64 9.64 0 0 0 12 2a10 10 0 0 0-8.96 5.52l3.35 2.62C7.18 7.77 9.39 6.01 12 6.01Z"
+                    />
+                  </svg>
+                  {t.continueWithGoogle}
+                </button>
+              </>
+            )}
             {isForgot || isNewPassword ? (
               <div className="mt-6 text-center">
                 <button
