@@ -54,7 +54,7 @@ const translations = {
     updatingPassword: 'Saving...', passwordUpdated: 'Password updated. You can now sign in.',
     backToSignIn: 'Back to Sign In', search: 'Search notes...', newNote: 'New Note',
     title: 'Title', titlePlaceholder: 'Note title', text: 'Note',
-    textPlaceholder: 'Write something...', reminder: 'Reminder', alarmTitle: 'Alarm', stopAlarm: 'Stop', snoozeAlarm: 'Snooze 5 min', attachment: 'Attachment',
+    textPlaceholder: 'Write something...', reminder: 'Reminder', chooseReminder: 'Choose date and time', alarmTitle: 'Alarm', stopAlarm: 'Stop', snoozeAlarm: 'Snooze 5 min', attachment: 'Attachment',
     addAttachment: 'Attach JPG / PNG', replaceAttachment: 'Replace image',
     removeAttachment: 'Remove image', fileTooLarge: 'Image must be 5 MB or smaller.',
     wrongFileType: 'Only JPG, JPEG and PNG images are allowed.',
@@ -91,7 +91,7 @@ const translations = {
     updatingPassword: 'Сохраняем...', passwordUpdated: 'Пароль изменён. Теперь можно войти.',
     backToSignIn: 'Вернуться ко входу', search: 'Поиск заметок...', newNote: 'Новая заметка',
     title: 'Заголовок', titlePlaceholder: 'Название заметки', text: 'Текст заметки',
-    textPlaceholder: 'Напишите что-нибудь...', reminder: 'Напоминание', alarmTitle: 'Будильник', stopAlarm: 'Остановить', snoozeAlarm: 'Отложить на 5 минут', enableNotifications: 'Включить уведомления', notificationsEnabled: 'Уведомления включены', notificationsUnsupported: 'Этот браузер не поддерживает уведомления.', attachment: 'Вложение',
+    textPlaceholder: 'Напишите что-нибудь...', reminder: 'Напоминание', chooseReminder: 'Выбрать дату и время', alarmTitle: 'Будильник', stopAlarm: 'Остановить', snoozeAlarm: 'Отложить на 5 минут', enableNotifications: 'Включить уведомления', notificationsEnabled: 'Уведомления включены', notificationsUnsupported: 'Этот браузер не поддерживает уведомления.', attachment: 'Вложение',
     addAttachment: 'Прикрепить JPG / PNG', replaceAttachment: 'Заменить изображение',
     removeAttachment: 'Убрать изображение', fileTooLarge: 'Размер изображения — не больше 5 MB.',
     wrongFileType: 'Можно загружать только JPG, JPEG и PNG.',
@@ -129,7 +129,7 @@ const translations = {
     updatingPassword: 'Guardando...', passwordUpdated: 'Contraseña actualizada. Ya puedes iniciar sesión.',
     backToSignIn: 'Volver a iniciar sesión', search: 'Buscar notas...', newNote: 'Nueva nota',
     title: 'Título', titlePlaceholder: 'Título de la nota', text: 'Nota',
-    textPlaceholder: 'Escribe algo...', reminder: 'Recordatorio', alarmTitle: 'Alarma', stopAlarm: 'Detener', snoozeAlarm: 'Posponer 5 min', enableNotifications: 'Activar notificaciones', notificationsEnabled: 'Notificaciones activadas', notificationsUnsupported: 'Este navegador no admite notificaciones.', attachment: 'Archivo adjunto',
+    textPlaceholder: 'Escribe algo...', reminder: 'Recordatorio', chooseReminder: 'Elegir fecha y hora', alarmTitle: 'Alarma', stopAlarm: 'Detener', snoozeAlarm: 'Posponer 5 min', enableNotifications: 'Activar notificaciones', notificationsEnabled: 'Notificaciones activadas', notificationsUnsupported: 'Este navegador no admite notificaciones.', attachment: 'Archivo adjunto',
     addAttachment: 'Adjuntar JPG / PNG', replaceAttachment: 'Reemplazar imagen',
     removeAttachment: 'Quitar imagen', fileTooLarge: 'La imagen debe pesar 5 MB o menos.',
     wrongFileType: 'Solo se permiten imágenes JPG, JPEG y PNG.',
@@ -808,7 +808,14 @@ export default function App() {
                 </div>
                 <div className="mt-4">
                   <label className={`mb-2 flex items-center gap-2 text-xs font-bold uppercase tracking-wider ${isDarkMode ? 'text-slate-300' : 'text-slate-600'}`}><Bell size={14} />{t.reminder}</label>
-                  <input type="datetime-local" value={reminderDate} onChange={(e) => setReminderDate(e.target.value)} style={{ colorScheme: isDarkMode ? 'dark' : 'light' }} className={`${inputClass(isDarkMode)} ${isDarkMode ? 'easynote-reminder-dark' : ''}`} />
+                  <div className="relative">
+                    {!reminderDate && (
+                      <div className={`pointer-events-none absolute inset-0 z-10 flex items-center px-4 text-sm ${isDarkMode ? 'text-slate-300' : 'text-slate-500'}`}>
+                        {t.chooseReminder}
+                      </div>
+                    )}
+                    <input type="datetime-local" value={reminderDate} onChange={(e) => setReminderDate(e.target.value)} style={{ colorScheme: isDarkMode ? 'dark' : 'light', color: reminderDate ? undefined : 'transparent', WebkitTextFillColor: reminderDate ? undefined : 'transparent' }} className={`${inputClass(isDarkMode)} ${isDarkMode ? 'easynote-reminder-dark' : ''}`} />
+                  </div>
                   {notificationPermission === 'granted' ? (
                     <div className="mt-2 flex items-center gap-2 text-xs font-bold text-emerald-400"><Bell size={13} />{t.notificationsEnabled}</div>
                   ) : notificationPermission === 'unsupported' ? (
