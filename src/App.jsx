@@ -808,7 +808,7 @@ export default function App() {
                 </div>
                 <div className="mt-4">
                   <label className={`mb-2 flex items-center gap-2 text-xs font-bold uppercase tracking-wider ${isDarkMode ? 'text-slate-300' : 'text-slate-600'}`}><Bell size={14} />{t.reminder}</label>
-                  <input type="datetime-local" value={reminderDate} onChange={(e) => setReminderDate(e.target.value)} className={`${inputClass(isDarkMode)} ${isDarkMode ? '[color-scheme:dark]' : '[color-scheme:light]'}`} />
+                  <input type="datetime-local" value={reminderDate} onChange={(e) => setReminderDate(e.target.value)} style={{ colorScheme: isDarkMode ? 'dark' : 'light' }} className={`${inputClass(isDarkMode)} ${isDarkMode ? 'easynote-reminder-dark' : ''}`} />
                   {notificationPermission === 'granted' ? (
                     <div className="mt-2 flex items-center gap-2 text-xs font-bold text-emerald-400"><Bell size={13} />{t.notificationsEnabled}</div>
                   ) : notificationPermission === 'unsupported' ? (
@@ -892,6 +892,28 @@ export default function App() {
         @media (max-width: 520px) {
           .easynote-alarm-card { top: 12px !important; }
           .easynote-alarm-actions { grid-template-columns: 1fr !important; }
+        }
+        .easynote-reminder-dark {
+          color-scheme: dark !important;
+          color: #e2e8f0 !important;
+          -webkit-text-fill-color: #e2e8f0 !important;
+        }
+        .easynote-reminder-dark::-webkit-date-and-time-value,
+        .easynote-reminder-dark::-webkit-datetime-edit,
+        .easynote-reminder-dark::-webkit-datetime-edit-fields-wrapper,
+        .easynote-reminder-dark::-webkit-datetime-edit-text,
+        .easynote-reminder-dark::-webkit-datetime-edit-month-field,
+        .easynote-reminder-dark::-webkit-datetime-edit-day-field,
+        .easynote-reminder-dark::-webkit-datetime-edit-year-field,
+        .easynote-reminder-dark::-webkit-datetime-edit-hour-field,
+        .easynote-reminder-dark::-webkit-datetime-edit-minute-field,
+        .easynote-reminder-dark::-webkit-datetime-edit-ampm-field {
+          color: #e2e8f0 !important;
+          -webkit-text-fill-color: #e2e8f0 !important;
+        }
+        .easynote-reminder-dark::-webkit-calendar-picker-indicator {
+          filter: invert(1) brightness(1.8) !important;
+          opacity: 1 !important;
         }
       `}</style>
 
