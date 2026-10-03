@@ -681,6 +681,73 @@ async function signUpRequest(email, password) {
   return data;
 }
 
+async function refreshSession() {
+  const refreshToken = localStorage.getItem(REFRESH_TOKEN_KEY);
+
+  if (!refreshToken) {
+    return false;
+  }
+
+  const response = await fetch(
+    `${SUPABASE_URL}/auth/v1/token?grant_type=refresh_token`,
+    {
+      method: 'POST',
+      headers: {
+        apikey: SUPABASE_ANON_KEY,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        refresh_token: refreshToken,
+      }),
+    }
+  );
+
+  const data = await response.json().catch(() => ({}));
+
+  if (!response.ok || !data?.access_token) {
+    clearSession();
+    return false;
+  }
+
+  return saveSession(data);
+}
+
+async function authenticatedFetch(url, options = {}) {
+  const currentAccessToken = localStorage.getItem(TOKEN_KEY) || '';
+  const headers = {
+    ...(options.headers || {}),
+  };
+
+  if (currentAccessToken) {
+    headers.Authorization = `Bearer ${currentAccessToken}`;
+  }
+
+  let response = await fetch(url, {
+    ...options,
+    headers,
+  });
+
+  if (response.status !== 401) {
+    return response;
+  }
+
+  const refreshed = await refreshSession();
+  if (!refreshed) {
+    return response;
+  }
+
+  const refreshedAccessToken = localStorage.getItem(TOKEN_KEY) || '';
+  response = await fetch(url, {
+    ...options,
+    headers: {
+      ...(options.headers || {}),
+      Authorization: `Bearer ${refreshedAccessToken}`,
+    },
+  });
+
+  return response;
+}
+
 async function sendPasswordResetRequest(email) {
   const redirectTo = `${window.location.origin}${window.location.pathname}`;
   const response = await fetch(
@@ -772,7 +839,7 @@ async function fetchNotes(accessToken, userId) {
 
   params.set('order', 'created_at.desc');
 
-  const response = await fetch(
+  const response = await authenticatedFetch(
     `${SUPABASE_URL}/rest/v1/notes?${params.toString()}`,
 
     {
@@ -798,7 +865,7 @@ async function fetchNotes(accessToken, userId) {
    ========================================================= */
 
 async function createNoteRequest(accessToken, userId, note) {
-  const response = await fetch(`${SUPABASE_URL}/rest/v1/notes`, {
+  const response = await authenticatedFetch(`${SUPABASE_URL}/rest/v1/notes`, {
     method: 'POST',
 
     headers: getDatabaseHeaders(accessToken, {
@@ -846,7 +913,7 @@ async function updatePinRequest(accessToken, userId, noteId, pinned) {
 
   params.set('user_id', `eq.${userId}`);
 
-  const response = await fetch(
+  const response = await authenticatedFetch(
     `${SUPABASE_URL}/rest/v1/notes?${params.toString()}`,
 
     {
@@ -883,7 +950,7 @@ async function updateNoteRequest(accessToken, userId, noteId, note) {
   params.set('id', `eq.${noteId}`);
   params.set('user_id', `eq.${userId}`);
 
-  const response = await fetch(
+  const response = await authenticatedFetch(
     `${SUPABASE_URL}/rest/v1/notes?${params.toString()}`,
     {
       method: 'PATCH',
@@ -923,7 +990,7 @@ async function deleteNoteRequest(accessToken, userId, noteId) {
 
   params.set('user_id', `eq.${userId}`);
 
-  const response = await fetch(
+  const response = await authenticatedFetch(
     `${SUPABASE_URL}/rest/v1/notes?${params.toString()}`,
 
     {
@@ -1009,6 +1076,8 @@ export default function App() {
 
   const [syncState, setSyncState] = useState('synced');
 
+  const [sessionReady, setSessionReady] = useState(false);
+
   const [search, setSearch] = useState('');
 
   const [newTitle, setNewTitle] = useState('');
@@ -1043,6 +1112,46 @@ export default function App() {
     localStorage.setItem(THEME_KEY, String(isDarkMode));
   }, [isDarkMode]);
 
+  useEffect(() => {
+    let cancelled = false;
+
+    async function restoreSession() {
+      const current = getStoredSession();
+
+      if (!current.refreshToken) {
+        if (!cancelled) setSessionReady(true);
+        return;
+      }
+
+      const refreshed = await refreshSession();
+
+      if (cancelled) return;
+
+      if (refreshed) {
+        const next = getStoredSession();
+        setAccessToken(next.accessToken);
+        setUserId(next.userId);
+        setUserEmail(next.email);
+      } else {
+        setAccessToken('');
+        setUserId('');
+        setUserEmail('');
+        setNotes([]);
+      }
+
+      setSessionReady(true);
+    }
+
+    restoreSession().catch((error) => {
+      console.error(error);
+      if (!cancelled) setSessionReady(true);
+    });
+
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
   /* -------------------------------------------------------
 
      После входа загружаем облачные заметки
@@ -1050,6 +1159,10 @@ export default function App() {
      ------------------------------------------------------- */
 
   useEffect(() => {
+    if (!sessionReady) {
+      return;
+    }
+
     if (!isLoggedIn) {
       setNotes([]);
 
@@ -1089,7 +1202,7 @@ export default function App() {
     return () => {
       cancelled = true;
     };
-  }, [accessToken, userId, isLoggedIn]);
+  }, [accessToken, userId, isLoggedIn, sessionReady]);
 
   /* -------------------------------------------------------
 
