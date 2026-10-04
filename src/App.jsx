@@ -54,7 +54,7 @@ const translations = {
     updatingPassword: 'Saving...', passwordUpdated: 'Password updated. You can now sign in.',
     backToSignIn: 'Back to Sign In', search: 'Search notes...', newNote: 'New Note',
     title: 'Title', titlePlaceholder: 'Note title', text: 'Note',
-    textPlaceholder: 'Write something...', reminder: 'Reminder', chooseReminder: 'Choose date and time', alarmTitle: 'Alarm', stopAlarm: 'Stop', snoozeAlarm: 'Snooze 5 min', attachment: 'Attachment',
+    textPlaceholder: 'Write something...', reminder: 'Reminder', alarmTitle: 'Alarm', stopAlarm: 'Stop', snoozeAlarm: 'Snooze 5 min', attachment: 'Attachment',
     addAttachment: 'Attach JPG / PNG', replaceAttachment: 'Replace image',
     removeAttachment: 'Remove image', fileTooLarge: 'Image must be 5 MB or smaller.',
     wrongFileType: 'Only JPG, JPEG and PNG images are allowed.',
@@ -91,7 +91,7 @@ const translations = {
     updatingPassword: 'Сохраняем...', passwordUpdated: 'Пароль изменён. Теперь можно войти.',
     backToSignIn: 'Вернуться ко входу', search: 'Поиск заметок...', newNote: 'Новая заметка',
     title: 'Заголовок', titlePlaceholder: 'Название заметки', text: 'Текст заметки',
-    textPlaceholder: 'Напишите что-нибудь...', reminder: 'Напоминание', chooseReminder: 'Выбрать дату и время', alarmTitle: 'Будильник', stopAlarm: 'Остановить', snoozeAlarm: 'Отложить на 5 минут', enableNotifications: 'Включить уведомления', notificationsEnabled: 'Уведомления включены', notificationsUnsupported: 'Этот браузер не поддерживает уведомления.', attachment: 'Вложение',
+    textPlaceholder: 'Напишите что-нибудь...', reminder: 'Напоминание', alarmTitle: 'Будильник', stopAlarm: 'Остановить', snoozeAlarm: 'Отложить на 5 минут', enableNotifications: 'Включить уведомления', notificationsEnabled: 'Уведомления включены', notificationsUnsupported: 'Этот браузер не поддерживает уведомления.', attachment: 'Вложение',
     addAttachment: 'Прикрепить JPG / PNG', replaceAttachment: 'Заменить изображение',
     removeAttachment: 'Убрать изображение', fileTooLarge: 'Размер изображения — не больше 5 MB.',
     wrongFileType: 'Можно загружать только JPG, JPEG и PNG.',
@@ -129,7 +129,7 @@ const translations = {
     updatingPassword: 'Guardando...', passwordUpdated: 'Contraseña actualizada. Ya puedes iniciar sesión.',
     backToSignIn: 'Volver a iniciar sesión', search: 'Buscar notas...', newNote: 'Nueva nota',
     title: 'Título', titlePlaceholder: 'Título de la nota', text: 'Nota',
-    textPlaceholder: 'Escribe algo...', reminder: 'Recordatorio', chooseReminder: 'Elegir fecha y hora', alarmTitle: 'Alarma', stopAlarm: 'Detener', snoozeAlarm: 'Posponer 5 min', enableNotifications: 'Activar notificaciones', notificationsEnabled: 'Notificaciones activadas', notificationsUnsupported: 'Este navegador no admite notificaciones.', attachment: 'Archivo adjunto',
+    textPlaceholder: 'Escribe algo...', reminder: 'Recordatorio', alarmTitle: 'Alarma', stopAlarm: 'Detener', snoozeAlarm: 'Posponer 5 min', enableNotifications: 'Activar notificaciones', notificationsEnabled: 'Notificaciones activadas', notificationsUnsupported: 'Este navegador no admite notificaciones.', attachment: 'Archivo adjunto',
     addAttachment: 'Adjuntar JPG / PNG', replaceAttachment: 'Reemplazar imagen',
     removeAttachment: 'Quitar imagen', fileTooLarge: 'La imagen debe pesar 5 MB o menos.',
     wrongFileType: 'Solo se permiten imágenes JPG, JPEG y PNG.',
@@ -808,36 +808,14 @@ export default function App() {
                 </div>
                 <div className="mt-4">
                   <label className={`mb-2 flex items-center gap-2 text-xs font-bold uppercase tracking-wider ${isDarkMode ? 'text-slate-300' : 'text-slate-600'}`}><Bell size={14} />{t.reminder}</label>
-                  <div className="relative">
-                    {!reminderDate && (
-                      <div className={`pointer-events-none absolute inset-0 z-10 flex items-center px-4 text-sm ${isDarkMode ? 'text-slate-300' : 'text-slate-500'}`}>
-                        {t.chooseReminder}
-                      </div>
-                    )}
-                    <input type="datetime-local" value={reminderDate} onChange={(e) => setReminderDate(e.target.value)} style={{ colorScheme: isDarkMode ? 'dark' : 'light', color: reminderDate ? undefined : 'transparent', WebkitTextFillColor: reminderDate ? undefined : 'transparent' }} className={`${inputClass(isDarkMode)} ${isDarkMode ? 'easynote-reminder-dark' : ''}`} />
-                  </div>
+                  <input type="datetime-local" value={reminderDate} onChange={(e) => setReminderDate(e.target.value)} className={`${inputClass(isDarkMode)} ${isDarkMode ? '[color-scheme:dark]' : '[color-scheme:light]'}`} />
                   {notificationPermission === 'granted' ? (
                     <div className="mt-2 flex items-center gap-2 text-xs font-bold text-emerald-400"><Bell size={13} />{t.notificationsEnabled}</div>
                   ) : notificationPermission === 'unsupported' ? (
                     <div className="mt-2 text-xs font-semibold text-amber-400">{t.notificationsUnsupported}</div>
                   ) : (
-                    <button
-                      type="button"
-                      onClick={enableNotifications}
-                      style={{
-                        width: '100%',
-                        marginTop: '10px',
-                        padding: '13px 14px',
-                        border: '2px solid #22d3ee',
-                        borderRadius: '12px',
-                        background: '#0891b2',
-                        color: '#ffffff',
-                        fontWeight: 800,
-                        fontSize: '15px',
-                        cursor: 'pointer',
-                      }}
-                    >
-                      🔔 {t.enableNotifications}
+                    <button type="button" onClick={enableNotifications} className={`mt-2 w-full rounded-xl border px-3 py-2 text-sm font-bold ${isDarkMode ? 'border-cyan-500/30 text-cyan-300' : 'border-cyan-300 text-cyan-700'}`}>
+                      {t.enableNotifications}
                     </button>
                   )}
                 </div>
@@ -914,28 +892,6 @@ export default function App() {
         @media (max-width: 520px) {
           .easynote-alarm-card { top: 12px !important; }
           .easynote-alarm-actions { grid-template-columns: 1fr !important; }
-        }
-        .easynote-reminder-dark {
-          color-scheme: dark !important;
-          color: #e2e8f0 !important;
-          -webkit-text-fill-color: #e2e8f0 !important;
-        }
-        .easynote-reminder-dark::-webkit-date-and-time-value,
-        .easynote-reminder-dark::-webkit-datetime-edit,
-        .easynote-reminder-dark::-webkit-datetime-edit-fields-wrapper,
-        .easynote-reminder-dark::-webkit-datetime-edit-text,
-        .easynote-reminder-dark::-webkit-datetime-edit-month-field,
-        .easynote-reminder-dark::-webkit-datetime-edit-day-field,
-        .easynote-reminder-dark::-webkit-datetime-edit-year-field,
-        .easynote-reminder-dark::-webkit-datetime-edit-hour-field,
-        .easynote-reminder-dark::-webkit-datetime-edit-minute-field,
-        .easynote-reminder-dark::-webkit-datetime-edit-ampm-field {
-          color: #e2e8f0 !important;
-          -webkit-text-fill-color: #e2e8f0 !important;
-        }
-        .easynote-reminder-dark::-webkit-calendar-picker-indicator {
-          filter: invert(1) brightness(1.8) !important;
-          opacity: 1 !important;
         }
       `}</style>
 
