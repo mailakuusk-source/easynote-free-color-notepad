@@ -821,8 +821,23 @@ export default function App() {
                   ) : notificationPermission === 'unsupported' ? (
                     <div className="mt-2 text-xs font-semibold text-amber-400">{t.notificationsUnsupported}</div>
                   ) : (
-                    <button type="button" onClick={enableNotifications} className={`mt-2 w-full rounded-xl border px-3 py-2 text-sm font-bold ${isDarkMode ? 'border-cyan-500/30 text-cyan-300' : 'border-cyan-300 text-cyan-700'}`}>
-                      {t.enableNotifications}
+                    <button
+                      type="button"
+                      onClick={enableNotifications}
+                      style={{
+                        width: '100%',
+                        marginTop: '10px',
+                        padding: '13px 14px',
+                        border: '2px solid #22d3ee',
+                        borderRadius: '12px',
+                        background: '#0891b2',
+                        color: '#ffffff',
+                        fontWeight: 800,
+                        fontSize: '15px',
+                        cursor: 'pointer',
+                      }}
+                    >
+                      🔔 {t.enableNotifications}
                     </button>
                   )}
                 </div>
